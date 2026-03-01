@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Header from "./Header";
 import BottomNav, { type TabId } from "./BottomNav";
 import HomeTab from "./HomeTab";
@@ -10,8 +11,11 @@ import RankingTab from "./RankingTab";
 import MyAppsTab from "./MyAppsTab";
 import ImproveDialog from "./ImproveDialog";
 import GamePlayer from "./GamePlayer";
+import PricingModal from "./PricingModal";
 import { GENRES, SAMPLE_APPS } from "@/lib/constants";
+import { canGenerate, canImprove, type UserUsage } from "@/lib/plans";
 import type { AppCreationOptions } from "@/types";
+import type { PricingPlan } from "@/lib/plans";
 
 interface SavedApp {
   id: string;
@@ -25,6 +29,7 @@ interface SavedApp {
 type AppView = "main" | "playing" | "generating";
 
 export default function AMIAApp() {
+  const { data: session } = useSession();
   const [tab, setTab] = useState<TabId>("home");
   const [view, setView] = useState<AppView>("main");
   const [initialGenre, setInitialGenre] = useState<string | undefined>();
@@ -34,12 +39,90 @@ export default function AMIAApp() {
   const [detailApp, setDetailApp] = useState<(typeof SAMPLE_APPS)[number] | null>(null);
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [lastGenOptions, setLastGenOptions] = useState<AppCreationOptions | null>(null);
+  const [showPricing, setShowPricing] = useState(false);
+
+  // 使用量管理
+  const [usage, setUsage] = useState<UserUsage>({
+    planId: "free",
+    generateCount: 0,
+    improveCount: 0,
+    periodStart: new Date().toISOString().slice(0, 7),
+  });
 
   const [genProgress, setGenProgress] = useState(0);
   const [genStatus, setGenStatus] = useState("");
   const [genError, setGenError] = useState<string | null>(null);
 
+  // 使用量取得
+  const fetchUsage = useCallback(async () => {
+    const userId = (session?.user as any)?.id;
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/user?userId=${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUsage(data);
+      }
+    } catch {}
+  }, [session]);
+
+  useEffect(() => {
+    fetchUsage();
+  }, [fetchUsage]);
+
+  // 使用量加算
+  const incrementUsage = async (action: "generate" | "improve") => {
+    const userId = (session?.user as any)?.id;
+    if (!userId) return;
+    try {
+      const res = await fetch("/api/user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, action }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsage(data);
+      }
+    } catch {}
+  };
+
+  // Stripe決済開始
+  const handleSelectPlan = async (plan: PricingPlan) => {
+    if (!plan.stripePriceId) {
+      alert("このプランの決済設定は準備中です。しばらくお待ちください。");
+      setShowPricing(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          priceId: plan.stripePriceId,
+          userId: (session?.user as any)?.id,
+          userEmail: session?.user?.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "決済ページの作成に失敗しました");
+      }
+    } catch (err: any) {
+      alert("エラー: " + err.message);
+    }
+    setShowPricing(false);
+  };
+
+  // アプリ生成
   const generateApp = useCallback(async (options: AppCreationOptions) => {
+    if (!canGenerate(usage)) {
+      setShowPricing(true);
+      return;
+    }
+
     setView("generating");
     setGenProgress(0);
     setGenStatus("設定を解析中...");
@@ -81,6 +164,8 @@ export default function AMIAApp() {
       setGenProgress(100);
       setGenStatus("完了！");
 
+      await incrementUsage("generate");
+
       const genre = GENRES.find((g) => g.id === options.genre);
       const saved: SavedApp = {
         id: `my_${Date.now()}`,
@@ -100,10 +185,18 @@ export default function AMIAApp() {
       setGenProgress(0);
       setGenStatus("");
     }
-  }, []);
+  }, [usage]);
 
+  // 改良
   const handleImprove = useCallback(async (instruction: string) => {
     if (!improvingApp) return;
+
+    if (!canImprove(usage)) {
+      setShowPricing(true);
+      setImprovingApp(null);
+      return;
+    }
+
     const appToImprove = improvingApp;
     setImprovingApp(null);
     setView("generating");
@@ -149,6 +242,8 @@ export default function AMIAApp() {
       setGenProgress(100);
       setGenStatus("改良完了！");
 
+      await incrementUsage("improve");
+
       const updated: SavedApp = { ...appToImprove, code: data.code };
       setMyApps((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
       setCurrentApp(updated);
@@ -157,7 +252,7 @@ export default function AMIAApp() {
       clearInterval(timer);
       setGenError(err.message);
     }
-  }, [improvingApp]);
+  }, [improvingApp, usage]);
 
   const playApp = useCallback((app: SavedApp) => {
     setCurrentApp(app);
@@ -180,7 +275,7 @@ export default function AMIAApp() {
   if (view === "generating") {
     return (
       <div className="flex min-h-screen flex-col bg-[#0a0a1a]">
-        <Header />
+        <Header usage={usage} onUpgradeClick={() => setShowPricing(true)} />
         <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
           {genError ? (
             <>
@@ -225,11 +320,9 @@ export default function AMIAApp() {
   if (detailApp) {
     return (
       <div className="flex min-h-screen flex-col bg-[#0a0a1a]">
-        <Header />
+        <Header usage={usage} onUpgradeClick={() => setShowPricing(true)} />
         <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
-          <button onClick={() => setDetailApp(null)} className="mb-3 text-sm text-[#aaa] hover:text-white">
-            ← 一覧に戻る
-          </button>
+          <button onClick={() => setDetailApp(null)} className="mb-3 text-sm text-[#aaa] hover:text-white">← 一覧に戻る</button>
           <div className="rounded-2xl bg-[#111118] p-5">
             <div className="mb-4 flex gap-4">
               <div className="text-6xl">{detailApp.thumbnail}</div>
@@ -241,7 +334,6 @@ export default function AMIAApp() {
                   <span>⭐ {detailApp.rating}</span>
                   <span>▶ {detailApp.plays.toLocaleString()}</span>
                   <span>❤️ {detailApp.likes}</span>
-                  <span>💬 {detailApp.comments}</span>
                 </div>
               </div>
             </div>
@@ -251,18 +343,8 @@ export default function AMIAApp() {
             <div className="mb-2 text-sm text-[#aaa]">評価する：</div>
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5].map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRatings((prev) => ({ ...prev, [detailApp.id]: r }))}
-                  className="bg-transparent text-2xl"
-                  style={{ color: (ratings[detailApp.id] || 0) >= r ? "#FFD700" : "#333" }}
-                >
-                  ★
-                </button>
+                <button key={r} onClick={() => setRatings((prev) => ({ ...prev, [detailApp.id]: r }))} className="bg-transparent text-2xl" style={{ color: (ratings[detailApp.id] || 0) >= r ? "#FFD700" : "#333" }}>★</button>
               ))}
-              {ratings[detailApp.id] && (
-                <span className="ml-2 self-center text-sm text-[#888]">{ratings[detailApp.id]}/5</span>
-              )}
             </div>
           </div>
         </main>
@@ -274,7 +356,7 @@ export default function AMIAApp() {
   // ====== メイン画面 ======
   return (
     <div className="flex min-h-screen flex-col bg-[#0a0a1a]">
-      <Header />
+      <Header usage={usage} onUpgradeClick={() => setShowPricing(true)} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-4">
         {tab === "home" && (
           <HomeTab
@@ -289,26 +371,20 @@ export default function AMIAApp() {
         {tab === "myapps" && (
           <MyAppsTab
             apps={myApps}
-            onPlay={(app) => {
-              const found = myApps.find((a) => a.id === app.id);
-              if (found) playApp(found);
-            }}
+            onPlay={(app) => { const f = myApps.find((a) => a.id === app.id); if (f) playApp(f); }}
             onDelete={(id) => setMyApps((prev) => prev.filter((a) => a.id !== id))}
-            onImprove={(app) => {
-              const found = myApps.find((a) => a.id === app.id);
-              if (found) setImprovingApp(found);
-            }}
+            onImprove={(app) => { const f = myApps.find((a) => a.id === app.id); if (f) setImprovingApp(f); }}
             onCreateClick={() => { setInitialGenre(undefined); setTab("create"); }}
           />
         )}
       </main>
       <BottomNav activeTab={tab} onTabChange={(t) => { setDetailApp(null); setTab(t); }} />
+
       {improvingApp && (
-        <ImproveDialog
-          appTitle={improvingApp.title}
-          onSubmit={handleImprove}
-          onClose={() => setImprovingApp(null)}
-        />
+        <ImproveDialog appTitle={improvingApp.title} onSubmit={handleImprove} onClose={() => setImprovingApp(null)} />
+      )}
+      {showPricing && (
+        <PricingModal currentPlanId={usage.planId} onSelectPlan={handleSelectPlan} onClose={() => setShowPricing(false)} />
       )}
     </div>
   );
