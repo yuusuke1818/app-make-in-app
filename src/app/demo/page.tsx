@@ -138,20 +138,15 @@ export default function DemoPage() {
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Noto Sans JP',sans-serif;background:#0a0a1a;color:#eee;overflow-x:hidden}#root{min-height:100vh;display:flex;flex-direction:column;align-items:center}</style>
 </head><body><div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"><\/script>
 <script type="text/babel">
-try{${generatedCode}
+try{${generatedCode.replace(/<\/script>/g, '<\\/script>')}
 const root=ReactDOM.createRoot(document.getElementById('root'));root.render(React.createElement(Game));
-window.parent.postMessage({type:'game-loaded'},'*');
-}catch(e){window.parent.postMessage({type:'game-error',message:e.message},'*');
-document.getElementById('root').innerHTML='<div style="padding:20px;color:#f44;text-align:center"><h3>エラー</h3><p>'+e.message+'</p></div>';}
-</script></body></html>`;
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    iframeRef.current.src = url;
-    return () => URL.revokeObjectURL(url);
+}catch(e){document.getElementById('root').innerHTML='<div style="padding:20px;color:#f44;text-align:center"><h3>エラー</h3><p>'+e.message+'</p></div>';}
+<\/script></body></html>`;
+    iframeRef.current.srcdoc = html;
   }, [generatedCode]);
 
   // ====== ゲームプレイ画面 ======
@@ -176,7 +171,7 @@ document.getElementById('root').innerHTML='<div style="padding:20px;color:#f44;t
           </div>
         )}
 
-        <iframe ref={iframeRef} style={{ flex: 1, width: "100%", border: "none", minHeight: "calc(100vh - 50px)" }} sandbox="allow-scripts allow-same-origin" title={generatedTitle} />
+        <iframe ref={iframeRef} style={{ flex: 1, width: "100%", border: "none", minHeight: "calc(100vh - 50px)" }} title={generatedTitle} />
       </div>
     );
   }

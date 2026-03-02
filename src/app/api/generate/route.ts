@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+function getClient() {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
 
 // 選択肢IDからラベルへの変換マップ
 const LABEL_MAP: Record<string, Record<string, string>> = {
@@ -62,9 +63,10 @@ export async function POST(req: NextRequest) {
   try {
     const { options, mode, instruction, existingCode } = await req.json();
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const client = getClient();
+    if (!client) {
       return NextResponse.json(
-        { error: "ANTHROPIC_API_KEY が設定されていません" },
+        { error: "ANTHROPIC_API_KEYが設定されていません。Vercelの環境変数を確認してください。" },
         { status: 500 }
       );
     }
