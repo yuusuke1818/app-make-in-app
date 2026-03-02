@@ -65,6 +65,10 @@ export default function AMIAApp() {
   const [genError, setGenError] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
+  // 改良履歴
+  const [revisions, setRevisions] = useState<{ id: string; version: number; instruction: string; status: string; created_at: string }[]>([]);
+  const [showRevisions, setShowRevisions] = useState(false);
+
   // データ
   const [publicApps, setPublicApps] = useState<AppData[]>([]);
   const [myApps, setMyApps] = useState<AppData[]>([]);
@@ -237,41 +241,64 @@ export default function AMIAApp() {
   const improveApp = async (app: AppData) => {
     if (!improveInput.trim()) return;
     setImproving(true);
+    const instruction = improveInput.trim();
+    const newVersion = app.version + 1;
+
     try {
-      if (app.code !== "stub" && useAI) {
-        // AI改良
+      if (useAI && app.code !== "stub") {
+        // === AI改良 ===
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ options: { name: app.title }, mode: "improve", instruction: improveInput, existingCode: app.code }),
+          body: JSON.stringify({ options: { name: app.title }, mode: "improve", instruction, existingCode: app.code }),
         });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
         const data = await res.json();
-        const newVersion = app.version + 1;
         if (supabase) {
           try {
             await supabase.from("apps").update({ code: data.code, version: newVersion, updated_at: new Date().toISOString() }).eq("id", app.id);
+            await supabase.from("revisions").insert({ app_id: app.id, version: newVersion, instruction, status: "applied" });
           } catch {}
         }
         const updated = { ...app, code: data.code, version: newVersion };
         setPlayingApp(updated);
         setGeneratedApp(updated);
+        // 履歴に追加
+        setRevisions(prev => [{ id: crypto.randomUUID(), version: newVersion, instruction, status: "applied", created_at: new Date().toISOString() }, ...prev]);
       } else {
-        // スタブモード：改良は表示のみ
-        const updated = { ...app, version: app.version + 1 };
+        // === スタブ / AI OFF ===
+        // 指示を保存（後でAI ONで適用可能）
         if (supabase) {
-          try { await supabase.from("apps").update({ version: updated.version }).eq("id", app.id); } catch {}
+          try {
+            await supabase.from("apps").update({ version: newVersion }).eq("id", app.id);
+            await supabase.from("revisions").insert({ app_id: app.id, version: newVersion, instruction, status: "pending" });
+          } catch {}
         }
+        const updated = { ...app, version: newVersion };
         setPlayingApp(updated);
         setGeneratedApp(updated);
+        setRevisions(prev => [{ id: crypto.randomUUID(), version: newVersion, instruction, status: "pending", created_at: new Date().toISOString() }, ...prev]);
       }
-      setShowImprove(false);
       setImproveInput("");
     } catch (err: any) {
+      // 失敗しても指示は記録
+      if (supabase) {
+        try { await supabase.from("revisions").insert({ app_id: app.id, version: newVersion, instruction, status: "failed" }); } catch {}
+      }
+      setRevisions(prev => [{ id: crypto.randomUUID(), version: newVersion, instruction, status: "failed", created_at: new Date().toISOString() }, ...prev]);
       alert("改良に失敗: " + err.message);
     } finally {
       setImproving(false);
     }
+  };
+
+  // 改良履歴読み込み
+  const loadRevisions = async (appId: string) => {
+    if (!supabase) return;
+    try {
+      const { data } = await supabase.from("revisions").select("*").eq("app_id", appId).order("created_at", { ascending: false });
+      if (data) setRevisions(data);
+    } catch {}
   };
 
   // ======================================
@@ -477,21 +504,51 @@ try {
             <span style={{ fontSize: 11, color: "#666" }}>▶ {playingApp.play_count + 1}回プレイ</span>
             {/* 改良ボタン（自分のアプリのみ） */}
             {user && playingApp.user_id === user.id && (
-              <button onClick={() => setShowImprove(!showImprove)}
+              <button onClick={() => { setShowImprove(!showImprove); if (!showImprove) loadRevisions(playingApp.id); }}
                 style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 20, border: "none", background: showImprove ? "#555" : "#FF8844", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                 {showImprove ? "✕ 閉じる" : "🔧 改良"}
               </button>
             )}
           </div>
-          {/* 改良入力 */}
+          {/* 改良パネル */}
           {showImprove && (
-            <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-              <input value={improveInput} onChange={e => setImproveInput(e.target.value)} placeholder="改良内容（例：敵を強くして、必殺技を追加）"
-                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
-              <button onClick={() => improveApp(playingApp)} disabled={!improveInput.trim() || improving}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: !improveInput.trim() || improving ? "#555" : ACCENT, color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80 }}>
-                {improving ? "⏳..." : "⚡ 改良"}
-              </button>
+            <div style={{ padding: "10px 16px 0" }}>
+              {/* AI OFF注意 */}
+              {!useAI && (
+                <div style={{ background: "#2a2a1a", border: "1px solid #555522", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 11, color: "#ccaa44" }}>
+                  💡 プロトタイプモード中。改良指示は記録され、AI ONで再生成すると反映されます。
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <input value={improveInput} onChange={e => setImproveInput(e.target.value)} placeholder="改良内容（例：敵を強くして、必殺技を追加）"
+                  onKeyDown={e => { if (e.key === "Enter" && improveInput.trim() && !improving) improveApp(playingApp); }}
+                  style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
+                <button onClick={() => improveApp(playingApp)} disabled={!improveInput.trim() || improving}
+                  style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: !improveInput.trim() || improving ? "#555" : ACCENT, color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80 }}>
+                  {improving ? "⏳..." : "⚡ 改良"}
+                </button>
+              </div>
+              {/* 改良履歴 */}
+              {revisions.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#888", marginBottom: 4 }}>📋 改良履歴（{revisions.length}件）</div>
+                  <div style={{ maxHeight: 150, overflowY: "auto", background: BG, borderRadius: 8, padding: 8 }}>
+                    {revisions.map((r, i) => (
+                      <div key={r.id || i} style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "5px 0", borderBottom: i < revisions.length - 1 ? "1px solid #1a1a2e" : "none" }}>
+                        <span style={{ fontSize: 10, color: "#666", whiteSpace: "nowrap", marginTop: 1 }}>v{r.version}</span>
+                        <span style={{
+                          fontSize: 8, padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap", marginTop: 1,
+                          background: r.status === "applied" ? "#1a3a1a" : r.status === "pending" ? "#3a3a1a" : "#3a1a1a",
+                          color: r.status === "applied" ? "#4CAF50" : r.status === "pending" ? "#FF8844" : "#f44",
+                        }}>
+                          {r.status === "applied" ? "適用済" : r.status === "pending" ? "未適用" : "失敗"}
+                        </span>
+                        <span style={{ fontSize: 12, color: "#ccc", flex: 1 }}>{r.instruction}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -536,18 +593,51 @@ try {
           )}
           {/* 改良＋操作パネル */}
           <div style={{ padding: "12px 16px", background: CARD_BG, borderTop: "1px solid #222" }}>
+            {/* AI OFF注意メッセージ */}
+            {!useAI && (
+              <div style={{ background: "#2a2a1a", border: "1px solid #555522", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 11, color: "#ccaa44", display: "flex", alignItems: "center", gap: 6 }}>
+                💡 現在プロトタイプモード。改良指示は記録されますが、AI ONで生成し直すと実際に反映されます。
+              </div>
+            )}
             {/* 改良入力 */}
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input value={improveInput} onChange={e => setImproveInput(e.target.value)} placeholder="改良指示（例：敵を増やして、BGM演出を追加）"
+                onKeyDown={e => { if (e.key === "Enter" && improveInput.trim() && !improving) improveApp(generatedApp); }}
                 style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
               <button onClick={() => improveApp(generatedApp)} disabled={!improveInput.trim() || improving}
                 style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: !improveInput.trim() || improving ? "#555" : "#FF8844", color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80, whiteSpace: "nowrap" }}>
                 {improving ? "⏳..." : "🔧 改良"}
               </button>
             </div>
+            {/* 改良履歴トグル */}
+            {revisions.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <button onClick={() => setShowRevisions(!showRevisions)}
+                  style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 12, fontWeight: 600, padding: 0 }}>
+                  📋 改良履歴（{revisions.length}件）{showRevisions ? " ▲" : " ▼"}
+                </button>
+                {showRevisions && (
+                  <div style={{ marginTop: 6, maxHeight: 180, overflowY: "auto", background: BG, borderRadius: 8, padding: 8 }}>
+                    {revisions.map((r, i) => (
+                      <div key={r.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < revisions.length - 1 ? "1px solid #1a1a2e" : "none" }}>
+                        <span style={{ fontSize: 10, color: "#666", whiteSpace: "nowrap", marginTop: 2 }}>v{r.version}</span>
+                        <span style={{
+                          fontSize: 8, padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap", marginTop: 2,
+                          background: r.status === "applied" ? "#1a3a1a" : r.status === "pending" ? "#3a3a1a" : "#3a1a1a",
+                          color: r.status === "applied" ? "#4CAF50" : r.status === "pending" ? "#FF8844" : "#f44",
+                        }}>
+                          {r.status === "applied" ? "適用済" : r.status === "pending" ? "未適用" : "失敗"}
+                        </span>
+                        <span style={{ fontSize: 12, color: "#ccc", flex: 1 }}>{r.instruction}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {/* アクションボタン */}
             <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-              <button onClick={() => { setCreateStep("genre"); setSelections({}); setSelectedGenre(""); setAppName(""); setFreeInput(""); setGeneratedApp(null); setGenError(""); setImproveInput(""); }}
+              <button onClick={() => { setCreateStep("genre"); setSelections({}); setSelectedGenre(""); setAppName(""); setFreeInput(""); setGeneratedApp(null); setGenError(""); setImproveInput(""); setRevisions([]); }}
                 style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #444", background: "transparent", color: "#aaa", cursor: "pointer", fontSize: 13 }}>作り直す</button>
               {generatedApp.status === "draft" && (
                 <button onClick={() => publishApp(generatedApp)}
