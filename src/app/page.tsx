@@ -58,6 +58,12 @@ export default function AMIAApp() {
   const [myRating, setMyRating] = useState(0);
   const [showImprove, setShowImprove] = useState(false);
   const [improveInput, setImproveInput] = useState("");
+  const [improving, setImproving] = useState(false);
+
+  // AI生成モード
+  const [useAI, setUseAI] = useState(false);
+  const [genError, setGenError] = useState("");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // データ
   const [publicApps, setPublicApps] = useState<AppData[]>([]);
@@ -123,42 +129,180 @@ export default function AMIAApp() {
   };
 
   // ======================================
-  // アプリ生成（スタブモード）
+  // アプリ生成（AI / スタブ）
   // ======================================
   const generateApp = async () => {
     setCreateStep("generating");
     setGenProgress(0);
-    const steps = ["要素解析中...", "世界観構築中...", "ゲームロジック生成中...", "UI生成中...", "バランス調整中...", "完了！"];
-    for (let i = 0; i < steps.length; i++) {
-      await new Promise(r => setTimeout(r, 400));
-      setGenProgress(Math.round(((i + 1) / steps.length) * 100));
-      setGenStatus(steps[i]);
-    }
-    const title = appName || GENRES.find(g => g.id === selectedGenre)?.label + "ゲーム";
-    const appId = crypto.randomUUID();
-    const app: AppData = {
-      id: appId, user_id: user?.id || "", title,
-      description: freeInput || `${title}のAI生成ゲーム`,
-      genre: selectedGenre, theme: (selections.theme || [""])[0], mood: (selections.mood || [""])[0],
-      thumbnail: GENRE_THUMBNAILS[selectedGenre] || "🎮",
-      options: { ...selections, freeInput }, code: "stub",
-      status: "draft", version: 1, play_count: 0, like_count: 0,
-      avg_rating: 0, rating_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    };
-    // Supabase保存
-    if (supabase && user) {
+    setGenError("");
+    const title = appName || (GENRES.find(g => g.id === selectedGenre)?.label || "") + "ゲーム";
+
+    if (useAI) {
+      // === AI生成モード ===
+      const progressSteps = ["要素解析中...", "プロンプト構築中...", "AIがゲームロジック生成中...", "コード出力中...", "検証中..."];
+      let stepIdx = 0;
+      const timer = setInterval(() => {
+        if (stepIdx < progressSteps.length) {
+          setGenProgress(Math.min(90, Math.round(((stepIdx + 1) / progressSteps.length) * 90)));
+          setGenStatus(progressSteps[stepIdx]);
+          stepIdx++;
+        }
+      }, 2000);
+
       try {
-        const { data } = await supabase.from("apps").insert({
-          id: appId, user_id: user.id, title, description: app.description,
-          genre: selectedGenre, theme: app.theme, mood: app.mood, thumbnail: app.thumbnail,
-          options: app.options, code: "stub", status: "draft",
-        }).select().single();
-        if (data) Object.assign(app, data);
-      } catch {}
+        const options = {
+          name: title, genre: selectedGenre,
+          ...Object.fromEntries(Object.entries(selections).map(([k, v]) => [k, v.length === 1 ? v[0] : v])),
+          gameMode: ["single"], screenLayout: "responsive", controls: ["tap"],
+          saveSystem: "autosave", customPrompt: freeInput || "",
+        };
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ options, mode: "generate" }),
+        });
+        clearInterval(timer);
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "生成に失敗しました");
+        }
+        const data = await res.json();
+        setGenProgress(100);
+        setGenStatus("完了！");
+
+        const appId = crypto.randomUUID();
+        const app: AppData = {
+          id: appId, user_id: user?.id || "", title,
+          description: freeInput || `${title} - AI生成ゲーム`,
+          genre: selectedGenre, theme: (selections.theme || [""])[0], mood: (selections.mood || [""])[0],
+          thumbnail: GENRE_THUMBNAILS[selectedGenre] || "🎮",
+          options: { ...selections, freeInput }, code: data.code,
+          status: "draft", version: 1, play_count: 0, like_count: 0,
+          avg_rating: 0, rating_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        };
+        if (supabase && user) {
+          try {
+            const { data: saved } = await supabase.from("apps").insert({
+              id: appId, user_id: user.id, title, description: app.description,
+              genre: selectedGenre, theme: app.theme, mood: app.mood, thumbnail: app.thumbnail,
+              options: app.options, code: data.code, status: "draft",
+            }).select().single();
+            if (saved) Object.assign(app, saved);
+          } catch {}
+        }
+        await new Promise(r => setTimeout(r, 500));
+        setGeneratedApp(app);
+        setCreateStep("preview");
+      } catch (err: any) {
+        clearInterval(timer);
+        setGenError(err.message);
+        setCreateStep("confirm");
+      }
+    } else {
+      // === スタブモード ===
+      const steps = ["要素解析中...", "世界観構築中...", "ゲームロジック生成中...", "UI生成中...", "完了！"];
+      for (let i = 0; i < steps.length; i++) {
+        await new Promise(r => setTimeout(r, 350));
+        setGenProgress(Math.round(((i + 1) / steps.length) * 100));
+        setGenStatus(steps[i]);
+      }
+      const appId = crypto.randomUUID();
+      const app: AppData = {
+        id: appId, user_id: user?.id || "", title,
+        description: freeInput || `${title}のAI生成ゲーム`,
+        genre: selectedGenre, theme: (selections.theme || [""])[0], mood: (selections.mood || [""])[0],
+        thumbnail: GENRE_THUMBNAILS[selectedGenre] || "🎮",
+        options: { ...selections, freeInput }, code: "stub",
+        status: "draft", version: 1, play_count: 0, like_count: 0,
+        avg_rating: 0, rating_count: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      if (supabase && user) {
+        try {
+          const { data } = await supabase.from("apps").insert({
+            id: appId, user_id: user.id, title, description: app.description,
+            genre: selectedGenre, theme: app.theme, mood: app.mood, thumbnail: app.thumbnail,
+            options: app.options, code: "stub", status: "draft",
+          }).select().single();
+          if (data) Object.assign(app, data);
+        } catch {}
+      }
+      setGeneratedApp(app);
+      setCreateStep("preview");
     }
-    setGeneratedApp(app);
-    setCreateStep("preview");
   };
+
+  // ======================================
+  // 改良機能（AI）
+  // ======================================
+  const improveApp = async (app: AppData) => {
+    if (!improveInput.trim()) return;
+    setImproving(true);
+    try {
+      if (app.code !== "stub" && useAI) {
+        // AI改良
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ options: { name: app.title }, mode: "improve", instruction: improveInput, existingCode: app.code }),
+        });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+        const data = await res.json();
+        const newVersion = app.version + 1;
+        if (supabase) {
+          try {
+            await supabase.from("apps").update({ code: data.code, version: newVersion, updated_at: new Date().toISOString() }).eq("id", app.id);
+          } catch {}
+        }
+        const updated = { ...app, code: data.code, version: newVersion };
+        setPlayingApp(updated);
+        setGeneratedApp(updated);
+      } else {
+        // スタブモード：改良は表示のみ
+        const updated = { ...app, version: app.version + 1 };
+        if (supabase) {
+          try { await supabase.from("apps").update({ version: updated.version }).eq("id", app.id); } catch {}
+        }
+        setPlayingApp(updated);
+        setGeneratedApp(updated);
+      }
+      setShowImprove(false);
+      setImproveInput("");
+    } catch (err: any) {
+      alert("改良に失敗: " + err.message);
+    } finally {
+      setImproving(false);
+    }
+  };
+
+  // ======================================
+  // AI生成コードのiframe描画
+  // ======================================
+  const renderAIGame = (code: string) => {
+    if (!iframeRef.current) return;
+    const escaped = code.replace(/<\/script>/g, "<\\/script>");
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Noto Sans JP',sans-serif;background:#0a0a1a;color:#eee;overflow-x:hidden}#root{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:8px}</style>
+</head><body><div id="root"><div style="text-align:center;padding:40px;color:#888">読み込み中...</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"><\/script>
+<script type="text/babel">
+try {
+  ${escaped}
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(React.createElement(Game));
+} catch(e) {
+  document.getElementById('root').innerHTML = '<div style="padding:20px;color:#f44;text-align:center"><h3>描画エラー</h3><pre style="text-align:left;font-size:11px;color:#888;margin-top:8px;white-space:pre-wrap">' + e.message + '</pre></div>';
+}
+<\/script></body></html>`;
+    iframeRef.current.srcdoc = html;
+  };
+
+  useEffect(() => {
+    if (playingApp && playingApp.code !== "stub" && iframeRef.current) renderAIGame(playingApp.code);
+  }, [playingApp]);
 
   // ======================================
   // 公開
@@ -295,18 +439,23 @@ export default function AMIAApp() {
   // プレイ画面
   // ======================================
   if (playingApp) {
-    const GameComponent = STUB_MAP[playingApp.genre] || BattleGame;
+    const isAIGenerated = playingApp.code !== "stub";
+    const GameComponent = !isAIGenerated ? (STUB_MAP[playingApp.genre] || BattleGame) : null;
     return (
-      <div style={{ minHeight: "100vh", background: BG, color: "#eee", fontFamily: "'Noto Sans JP', sans-serif" }}>
+      <div style={{ minHeight: "100vh", background: BG, color: "#eee", fontFamily: "'Noto Sans JP', sans-serif", display: "flex", flexDirection: "column" }}>
         {/* ヘッダー */}
         <div style={{ background: CARD_BG, borderBottom: "1px solid #222", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={() => { setPlayingApp(null); loadPublicApps(); }} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 14 }}>← 戻る</button>
           <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{playingApp.thumbnail} {playingApp.title}</span>
-          <span style={{ fontSize: 10, color: "#555" }}>v{playingApp.version}</span>
+          <span style={{ fontSize: 10, color: isAIGenerated ? "#4ECDC4" : "#FF8844", background: "#222", padding: "2px 6px", borderRadius: 4 }}>{isAIGenerated ? "AI" : "STUB"} v{playingApp.version}</span>
         </div>
 
         {/* ゲーム表示 */}
-        <GameComponent />
+        {isAIGenerated ? (
+          <iframe ref={iframeRef} style={{ flex: 1, width: "100%", border: "none", minHeight: "60vh" }} title={playingApp.title} />
+        ) : (
+          GameComponent && <GameComponent />
+        )}
 
         {/* 評価バー */}
         <div style={{ background: CARD_BG, borderTop: "1px solid #222", padding: "12px 16px" }}>
@@ -328,9 +477,9 @@ export default function AMIAApp() {
             <span style={{ fontSize: 11, color: "#666" }}>▶ {playingApp.play_count + 1}回プレイ</span>
             {/* 改良ボタン（自分のアプリのみ） */}
             {user && playingApp.user_id === user.id && (
-              <button onClick={() => setShowImprove(true)}
-                style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 20, border: "none", background: "#FF8844", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                🔧 改良
+              <button onClick={() => setShowImprove(!showImprove)}
+                style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 20, border: "none", background: showImprove ? "#555" : "#FF8844", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                {showImprove ? "✕ 閉じる" : "🔧 改良"}
               </button>
             )}
           </div>
@@ -339,8 +488,10 @@ export default function AMIAApp() {
             <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
               <input value={improveInput} onChange={e => setImproveInput(e.target.value)} placeholder="改良内容（例：敵を強くして、必殺技を追加）"
                 style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
-              <button onClick={() => { setShowImprove(false); setImproveInput(""); }}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: ACCENT, color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>⚡ 改良</button>
+              <button onClick={() => improveApp(playingApp)} disabled={!improveInput.trim() || improving}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: !improveInput.trim() || improving ? "#555" : ACCENT, color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80 }}>
+                {improving ? "⏳..." : "⚡ 改良"}
+              </button>
             </div>
           )}
         </div>
@@ -368,16 +519,23 @@ export default function AMIAApp() {
     }
 
     if (createStep === "preview" && generatedApp) {
-      const GameComponent = STUB_MAP[generatedApp.genre] || BattleGame;
+      const isAI = generatedApp.code !== "stub";
+      const PreviewGameComponent = !isAI ? (STUB_MAP[generatedApp.genre] || BattleGame) : null;
       return (
-        <div style={{ minHeight: "100vh", background: BG, color: "#eee", fontFamily: "'Noto Sans JP', sans-serif" }}>
+        <div style={{ minHeight: "100vh", background: BG, color: "#eee", fontFamily: "'Noto Sans JP', sans-serif", display: "flex", flexDirection: "column" }}>
           <div style={{ background: CARD_BG, borderBottom: "1px solid #222", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => setCreateStep("confirm")} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 14 }}>← 戻る</button>
             <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>プレビュー: {generatedApp.title}</span>
+            <span style={{ fontSize: 10, color: isAI ? ACCENT : "#FF8844", background: "#222", padding: "2px 6px", borderRadius: 4 }}>{isAI ? "AI生成" : "STUB"}</span>
           </div>
-          <GameComponent />
-          <div style={{ padding: "16px", display: "flex", gap: 10, justifyContent: "center" }}>
-            <button onClick={() => { setCreateStep("genre"); setSelections({}); setSelectedGenre(""); setAppName(""); setFreeInput(""); setGeneratedApp(null); }}
+          {isAI ? (
+            <iframe style={{ flex: 1, width: "100%", border: "none", minHeight: "55vh" }} title={generatedApp.title}
+              ref={(el) => { if (el && generatedApp.code !== "stub") { const esc = generatedApp.code.replace(/<\/script>/g, "<\\/script>"); el.srcdoc = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800;900&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Noto Sans JP",sans-serif;background:#0a0a1a;color:#eee;overflow-x:hidden}#root{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:8px}</style></head><body><div id="root"></div><script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"><\\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"><\\/script><script type="text/babel">try{' + esc + ';const root=ReactDOM.createRoot(document.getElementById("root"));root.render(React.createElement(Game));}catch(e){document.getElementById("root").innerHTML="<div style=\\"padding:20px;color:#f44;text-align:center\\"><h3>エラー</h3><p>"+e.message+"</p></div>";}<\\/script></body></html>'; } }} />
+          ) : (
+            PreviewGameComponent && <PreviewGameComponent />
+          )}
+          <div style={{ padding: "16px", display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button onClick={() => { setCreateStep("genre"); setSelections({}); setSelectedGenre(""); setAppName(""); setFreeInput(""); setGeneratedApp(null); setGenError(""); }}
               style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #444", background: "transparent", color: "#aaa", cursor: "pointer", fontSize: 13 }}>作り直す</button>
             {generatedApp.status === "draft" && (
               <button onClick={() => publishApp(generatedApp)}
@@ -456,6 +614,11 @@ export default function AMIAApp() {
           {createStep === "confirm" && (
             <>
               <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>📝 最終確認</h2>
+              {genError && (
+                <div style={{ background: "#3a1a1a", border: "1px solid #f44", borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 12, color: "#f88" }}>
+                  ⚠️ {genError}
+                </div>
+              )}
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, color: "#aaa", display: "block", marginBottom: 4 }}>ゲーム名</label>
                 <input value={appName} onChange={e => setAppName(e.target.value)} placeholder="例：宇宙戦記RPG"
@@ -466,6 +629,17 @@ export default function AMIAApp() {
                 <textarea value={freeInput} onChange={e => setFreeInput(e.target.value)}
                   placeholder="例：主人公は猫で、敵はネズミの軍団。必殺技は「にゃんこパンチ」。"
                   style={{ width: "100%", minHeight: 80, padding: "10px 12px", borderRadius: 8, border: "1px solid #333", background: CARD_BG, color: "#eee", fontSize: 13, resize: "vertical", outline: "none", boxSizing: "border-box" }} />
+              </div>
+              {/* AI切替トグル */}
+              <div style={{ marginBottom: 14, background: CARD_BG, borderRadius: 10, padding: 12, display: "flex", alignItems: "center", gap: 10, border: `1px solid ${useAI ? ACCENT : "#333"}` }}>
+                <button onClick={() => setUseAI(!useAI)}
+                  style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: useAI ? ACCENT : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 23 : 3, transition: "left 0.2s" }} />
+                </button>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>AI生成 {useAI ? "ON" : "OFF"}</div>
+                  <div style={{ fontSize: 10, color: "#888" }}>{useAI ? "Claude APIでオリジナルゲームを生成（API消費あり・30秒程度）" : "プロトタイプ表示（API消費なし・即座）"}</div>
+                </div>
               </div>
               {/* 選択サマリー */}
               <div style={{ background: CARD_BG, borderRadius: 10, padding: 12, marginBottom: 16 }}>
