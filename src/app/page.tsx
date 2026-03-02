@@ -245,15 +245,33 @@ export default function AMIAApp() {
     const newVersion = app.version + 1;
 
     try {
-      if (useAI && app.code !== "stub") {
-        // === AI改良 ===
+      if (useAI) {
+        // === AI改良（スタブでもAI ONなら新規/改良生成） ===
+        let body: Record<string, any>;
+
+        if (app.code !== "stub") {
+          // 既存AIコードがある場合：改良モード
+          body = { options: { name: app.title }, mode: "improve", instruction, existingCode: app.code };
+        } else {
+          // スタブの場合：選択要素＋改良指示で新規生成
+          const opts = {
+            name: app.title, genre: app.genre,
+            ...(app.options || {}),
+            gameMode: ["single"], screenLayout: "responsive", controls: ["tap"],
+            saveSystem: "autosave",
+            customPrompt: [app.options?.freeInput, instruction].filter(Boolean).join("。また、"),
+          };
+          body = { options: opts, mode: "generate" };
+        }
+
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ options: { name: app.title }, mode: "improve", instruction, existingCode: app.code }),
+          body: JSON.stringify(body),
         });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || "API呼び出しに失敗"); }
         const data = await res.json();
+
         if (supabase) {
           try {
             await supabase.from("apps").update({ code: data.code, version: newVersion, updated_at: new Date().toISOString() }).eq("id", app.id);
@@ -263,11 +281,10 @@ export default function AMIAApp() {
         const updated = { ...app, code: data.code, version: newVersion };
         setPlayingApp(updated);
         setGeneratedApp(updated);
-        // 履歴に追加
         setRevisions(prev => [{ id: crypto.randomUUID(), version: newVersion, instruction, status: "applied", created_at: new Date().toISOString() }, ...prev]);
+
       } else {
-        // === スタブ / AI OFF ===
-        // 指示を保存（後でAI ONで適用可能）
+        // === AI OFF：指示を記録のみ ===
         if (supabase) {
           try {
             await supabase.from("apps").update({ version: newVersion }).eq("id", app.id);
@@ -281,7 +298,6 @@ export default function AMIAApp() {
       }
       setImproveInput("");
     } catch (err: any) {
-      // 失敗しても指示は記録
       if (supabase) {
         try { await supabase.from("revisions").insert({ app_id: app.id, version: newVersion, instruction, status: "failed" }); } catch {}
       }
@@ -539,14 +555,18 @@ try {
           {showImprove && (
             <div style={{ padding: "12px 16px", background: CARD_BG, borderTop: `1px solid ${BORDER}` }}>
               {/* AIトグル */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", background: BG, borderRadius: 10, border: `1px solid ${useAI ? ACCENT + "55" : BORDER}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "10px 14px", background: useAI ? `${ACCENT}08` : BG, borderRadius: 12, border: `1px solid ${useAI ? ACCENT + "44" : BORDER}`, transition: "all 0.2s" }}>
                 <button onClick={() => setUseAI(!useAI)}
-                  style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: useAI ? ACCENT : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                  <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 21 : 3, transition: "left 0.2s" }} />
+                  style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: useAI ? `linear-gradient(135deg, ${ACCENT}, ${ACCENT3})` : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0, boxShadow: useAI ? `0 2px 8px ${ACCENT}33` : "none" }}>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 23 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
                 </button>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: useAI ? ACCENT : TEXT2 }}>AI生成 {useAI ? "ON" : "OFF"}</div>
-                  <div style={{ fontSize: 10, color: TEXT3 }}>{useAI ? "改良時にClaude APIでコード変更" : "改良指示を記録のみ（API消費なし）"}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: useAI ? ACCENT : TEXT2 }}>
+                    {useAI ? "🤖 AI改良モード" : "📝 記録モード"}
+                  </div>
+                  <div style={{ fontSize: 10, color: TEXT3, marginTop: 1 }}>
+                    {useAI ? "Claude APIがゲームコードを実際に変更します（API消費あり）" : "改良指示を保存のみ。AIをONにすると実際に反映されます"}
+                  </div>
                 </div>
               </div>
               {/* 改良入力 */}
@@ -632,14 +652,18 @@ try {
           <div style={{ padding: "12px 16px", background: CARD_BG, borderTop: `1px solid ${BORDER}` }}>
 
             {/* AIモードトグル */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", background: BG, borderRadius: 10, border: `1px solid ${useAI ? ACCENT + "55" : BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "10px 14px", background: useAI ? `${ACCENT}08` : BG, borderRadius: 12, border: `1px solid ${useAI ? ACCENT + "44" : BORDER}`, transition: "all 0.2s" }}>
               <button onClick={() => setUseAI(!useAI)}
-                style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: useAI ? ACCENT : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 21 : 3, transition: "left 0.2s" }} />
+                style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: useAI ? `linear-gradient(135deg, ${ACCENT}, ${ACCENT3})` : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0, boxShadow: useAI ? `0 2px 8px ${ACCENT}33` : "none" }}>
+                <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 23 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
               </button>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: useAI ? ACCENT : TEXT2 }}>AI生成 {useAI ? "ON" : "OFF"}</div>
-                <div style={{ fontSize: 10, color: TEXT3 }}>{useAI ? "改良時にClaude APIを使用（実際にコード変更）" : "改良指示を記録のみ（API消費なし）"}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: useAI ? ACCENT : TEXT2 }}>
+                  {useAI ? "🤖 AI改良モード" : "📝 記録モード"}
+                </div>
+                <div style={{ fontSize: 10, color: TEXT3, marginTop: 1 }}>
+                  {useAI ? "Claude APIがゲームコードを実際に変更します（API消費あり）" : "改良指示を保存のみ。AIをONにすると実際に反映されます"}
+                </div>
               </div>
             </div>
 
@@ -787,14 +811,18 @@ try {
                   style={{ width: "100%", minHeight: 80, padding: "10px 12px", borderRadius: 8, border: "1px solid #333", background: CARD_BG, color: "#eee", fontSize: 13, resize: "vertical", outline: "none", boxSizing: "border-box" }} />
               </div>
               {/* AI切替トグル */}
-              <div style={{ marginBottom: 14, background: CARD_BG, borderRadius: 10, padding: 12, display: "flex", alignItems: "center", gap: 10, border: `1px solid ${useAI ? ACCENT : "#333"}` }}>
+              <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: useAI ? `${ACCENT}08` : BG, borderRadius: 12, border: `1px solid ${useAI ? ACCENT + "44" : BORDER}`, transition: "all 0.2s" }}>
                 <button onClick={() => setUseAI(!useAI)}
-                  style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: useAI ? ACCENT : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 23 : 3, transition: "left 0.2s" }} />
+                  style={{ width: 44, height: 24, borderRadius: 12, border: "none", background: useAI ? `linear-gradient(135deg, ${ACCENT}, ${ACCENT3})` : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0, boxShadow: useAI ? `0 2px 8px ${ACCENT}33` : "none" }}>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 23 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
                 </button>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>AI生成 {useAI ? "ON" : "OFF"}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{useAI ? "Claude APIでオリジナルゲームを生成（API消費あり・30秒程度）" : "プロトタイプ表示（API消費なし・即座）"}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: useAI ? ACCENT : TEXT2 }}>
+                    {useAI ? "🤖 AI生成モード" : "📝 プロトタイプモード"}
+                  </div>
+                  <div style={{ fontSize: 10, color: TEXT3, marginTop: 1 }}>
+                    {useAI ? "Claude APIでオリジナルゲームを生成（API消費あり・30秒程度）" : "事前登録されたスタブゲームを表示（API消費なし・即座）"}
+                  </div>
                 </div>
               </div>
               {/* 選択サマリー */}
