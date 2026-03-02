@@ -537,38 +537,50 @@ try {
           </div>
           {/* 改良パネル */}
           {showImprove && (
-            <div style={{ padding: "10px 16px 0" }}>
-              {/* AI OFF注意 */}
-              {!useAI && (
-                <div style={{ background: "#2a2a1a", border: "1px solid #555522", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 11, color: "#ccaa44" }}>
-                  💡 プロトタイプモード中。改良指示は記録され、AI ONで再生成すると反映されます。
+            <div style={{ padding: "12px 16px", background: CARD_BG, borderTop: `1px solid ${BORDER}` }}>
+              {/* AIトグル */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", background: BG, borderRadius: 10, border: `1px solid ${useAI ? ACCENT + "55" : BORDER}` }}>
+                <button onClick={() => setUseAI(!useAI)}
+                  style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: useAI ? ACCENT : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 21 : 3, transition: "left 0.2s" }} />
+                </button>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: useAI ? ACCENT : TEXT2 }}>AI生成 {useAI ? "ON" : "OFF"}</div>
+                  <div style={{ fontSize: 10, color: TEXT3 }}>{useAI ? "改良時にClaude APIでコード変更" : "改良指示を記録のみ（API消費なし）"}</div>
                 </div>
-              )}
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              </div>
+              {/* 改良入力 */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <input value={improveInput} onChange={e => setImproveInput(e.target.value)} placeholder="改良内容（例：敵を強くして、必殺技を追加）"
                   onKeyDown={e => { if (e.key === "Enter" && improveInput.trim() && !improving) improveApp(playingApp); }}
-                  style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
+                  style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
                 <button onClick={() => improveApp(playingApp)} disabled={!improveInput.trim() || improving}
-                  style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: !improveInput.trim() || improving ? "#555" : ACCENT, color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80 }}>
-                  {improving ? "⏳..." : "⚡ 改良"}
+                  style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: !improveInput.trim() || improving ? "#333" : `linear-gradient(135deg, #FF8844, ${ACCENT2})`, color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80, whiteSpace: "nowrap", opacity: !improveInput.trim() ? 0.5 : 1 }}>
+                  {improving ? "⏳ 改良中..." : "🔧 改良する"}
                 </button>
               </div>
-              {/* 改良履歴 */}
+              {/* 改良履歴（常時表示） */}
               {revisions.length > 0 && (
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#888", marginBottom: 4 }}>📋 改良履歴（{revisions.length}件）</div>
-                  <div style={{ maxHeight: 150, overflowY: "auto", background: BG, borderRadius: 8, padding: 8 }}>
+                <div style={{ background: BG, borderRadius: 10, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
+                  <div style={{ padding: "8px 12px", background: CARD_BG2, borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>📋 改良履歴</span>
+                    <span style={{ fontSize: 10, color: TEXT3 }}>{revisions.length}件</span>
+                  </div>
+                  <div style={{ maxHeight: 180, overflowY: "auto", padding: 8 }}>
                     {revisions.map((r, i) => (
-                      <div key={r.id || i} style={{ display: "flex", gap: 6, alignItems: "flex-start", padding: "5px 0", borderBottom: i < revisions.length - 1 ? "1px solid #1a1a2e" : "none" }}>
-                        <span style={{ fontSize: 10, color: "#666", whiteSpace: "nowrap", marginTop: 1 }}>v{r.version}</span>
-                        <span style={{
-                          fontSize: 8, padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap", marginTop: 1,
-                          background: r.status === "applied" ? "#1a3a1a" : r.status === "pending" ? "#3a3a1a" : "#3a1a1a",
-                          color: r.status === "applied" ? "#4CAF50" : r.status === "pending" ? "#FF8844" : "#f44",
-                        }}>
-                          {r.status === "applied" ? "適用済" : r.status === "pending" ? "未適用" : "失敗"}
-                        </span>
-                        <span style={{ fontSize: 12, color: "#ccc", flex: 1 }}>{r.instruction}</span>
+                      <div key={r.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 4px", borderBottom: i < revisions.length - 1 ? `1px solid ${BORDER}` : "none", animation: i === 0 ? "fadeIn 0.3s ease-out" : "none" }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: TEXT2, background: CARD_BG2, padding: "2px 6px", borderRadius: 4 }}>v{r.version}</span>
+                          <span style={{
+                            fontSize: 9, padding: "1px 5px", borderRadius: 4,
+                            background: r.status === "applied" ? "#4CAF5020" : r.status === "pending" ? "#FF884420" : "#f4443320",
+                            color: r.status === "applied" ? "#4CAF50" : r.status === "pending" ? "#FF8844" : "#f44",
+                            fontWeight: 600,
+                          }}>
+                            {r.status === "applied" ? "✓ 適用済" : r.status === "pending" ? "⏳ 未適用" : "✕ 失敗"}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, color: "#ddd", flex: 1, lineHeight: 1.5 }}>{r.instruction}</span>
                       </div>
                     ))}
                   </div>
@@ -617,61 +629,77 @@ try {
             PreviewGameComponent && <PreviewGameComponent />
           )}
           {/* 改良＋操作パネル */}
-          <div style={{ padding: "12px 16px", background: CARD_BG, borderTop: "1px solid #222" }}>
-            {/* AI OFF注意メッセージ */}
-            {!useAI && (
-              <div style={{ background: "#2a2a1a", border: "1px solid #555522", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 11, color: "#ccaa44", display: "flex", alignItems: "center", gap: 6 }}>
-                💡 現在プロトタイプモード。改良指示は記録されますが、AI ONで生成し直すと実際に反映されます。
+          <div style={{ padding: "12px 16px", background: CARD_BG, borderTop: `1px solid ${BORDER}` }}>
+
+            {/* AIモードトグル */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", background: BG, borderRadius: 10, border: `1px solid ${useAI ? ACCENT + "55" : BORDER}` }}>
+              <button onClick={() => setUseAI(!useAI)}
+                style={{ width: 40, height: 22, borderRadius: 11, border: "none", background: useAI ? ACCENT : "#333", cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", position: "absolute", top: 3, left: useAI ? 21 : 3, transition: "left 0.2s" }} />
+              </button>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: useAI ? ACCENT : TEXT2 }}>AI生成 {useAI ? "ON" : "OFF"}</div>
+                <div style={{ fontSize: 10, color: TEXT3 }}>{useAI ? "改良時にClaude APIを使用（実際にコード変更）" : "改良指示を記録のみ（API消費なし）"}</div>
               </div>
-            )}
+            </div>
+
             {/* 改良入力 */}
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input value={improveInput} onChange={e => setImproveInput(e.target.value)} placeholder="改良指示（例：敵を増やして、BGM演出を追加）"
                 onKeyDown={e => { if (e.key === "Enter" && improveInput.trim() && !improving) improveApp(generatedApp); }}
-                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
+                style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: BG, color: "#eee", fontSize: 13, outline: "none", transition: "border-color 0.2s" }} />
               <button onClick={() => improveApp(generatedApp)} disabled={!improveInput.trim() || improving}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: !improveInput.trim() || improving ? "#555" : "#FF8844", color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80, whiteSpace: "nowrap" }}>
-                {improving ? "⏳..." : "🔧 改良"}
+                style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: !improveInput.trim() || improving ? "#333" : `linear-gradient(135deg, #FF8844, ${ACCENT2})`, color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80, whiteSpace: "nowrap", transition: "opacity 0.2s", opacity: !improveInput.trim() ? 0.5 : 1 }}>
+                {improving ? "⏳ 改良中..." : "🔧 改良する"}
               </button>
             </div>
-            {/* 改良履歴トグル */}
+
+            {/* 改良履歴（常時表示） */}
             {revisions.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <button onClick={() => setShowRevisions(!showRevisions)}
-                  style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 12, fontWeight: 600, padding: 0 }}>
-                  📋 改良履歴（{revisions.length}件）{showRevisions ? " ▲" : " ▼"}
-                </button>
-                {showRevisions && (
-                  <div style={{ marginTop: 6, maxHeight: 180, overflowY: "auto", background: BG, borderRadius: 8, padding: 8 }}>
-                    {revisions.map((r, i) => (
-                      <div key={r.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < revisions.length - 1 ? "1px solid #1a1a2e" : "none" }}>
-                        <span style={{ fontSize: 10, color: "#666", whiteSpace: "nowrap", marginTop: 2 }}>v{r.version}</span>
+              <div style={{ marginBottom: 12, background: BG, borderRadius: 10, border: `1px solid ${BORDER}`, overflow: "hidden" }}>
+                <div style={{ padding: "8px 12px", background: CARD_BG2, borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>📋 改良履歴</span>
+                  <span style={{ fontSize: 10, color: TEXT3 }}>{revisions.length}件</span>
+                </div>
+                <div style={{ maxHeight: 200, overflowY: "auto", padding: 8 }}>
+                  {revisions.map((r, i) => (
+                    <div key={r.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "8px 4px", borderBottom: i < revisions.length - 1 ? `1px solid ${BORDER}` : "none", animation: i === 0 ? "fadeIn 0.3s ease-out" : "none" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: TEXT2, background: CARD_BG2, padding: "2px 6px", borderRadius: 4 }}>v{r.version}</span>
                         <span style={{
-                          fontSize: 8, padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap", marginTop: 2,
-                          background: r.status === "applied" ? "#1a3a1a" : r.status === "pending" ? "#3a3a1a" : "#3a1a1a",
+                          fontSize: 9, padding: "1px 5px", borderRadius: 4,
+                          background: r.status === "applied" ? "#4CAF5020" : r.status === "pending" ? "#FF884420" : "#f4443320",
                           color: r.status === "applied" ? "#4CAF50" : r.status === "pending" ? "#FF8844" : "#f44",
+                          fontWeight: 600,
                         }}>
-                          {r.status === "applied" ? "適用済" : r.status === "pending" ? "未適用" : "失敗"}
+                          {r.status === "applied" ? "✓ 適用済" : r.status === "pending" ? "⏳ 未適用" : "✕ 失敗"}
                         </span>
-                        <span style={{ fontSize: 12, color: "#ccc", flex: 1 }}>{r.instruction}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <span style={{ fontSize: 12, color: "#ddd", flex: 1, lineHeight: 1.5 }}>{r.instruction}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+
             {/* アクションボタン */}
             <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
               <button onClick={() => { setCreateStep("genre"); setSelections({}); setSelectedGenre(""); setAppName(""); setFreeInput(""); setGeneratedApp(null); setGenError(""); setImproveInput(""); setRevisions([]); }}
-                style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #444", background: "transparent", color: "#aaa", cursor: "pointer", fontSize: 13 }}>作り直す</button>
+                style={{ padding: "10px 20px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "transparent", color: TEXT2, cursor: "pointer", fontSize: 13, transition: "border-color 0.2s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = "#555"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}>
+                作り直す
+              </button>
               {generatedApp.status === "draft" && (
                 <button onClick={() => publishApp(generatedApp)}
-                  style={{ padding: "12px 28px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, color: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 800 }}>
+                  style={{ padding: "12px 28px", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, color: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 800, boxShadow: `0 4px 15px ${ACCENT}22`, transition: "transform 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
+                  onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
                   🌐 公開する
                 </button>
               )}
               {generatedApp.status === "published" && (
-                <div style={{ padding: "12px 20px", background: "#1a3a1a", borderRadius: 10, color: "#4CAF50", fontWeight: 700 }}>✅ 公開済み</div>
+                <div style={{ padding: "12px 20px", background: "#4CAF5015", borderRadius: 12, color: "#4CAF50", fontWeight: 700, border: "1px solid #4CAF5033" }}>✅ 公開済み</div>
               )}
             </div>
           </div>
