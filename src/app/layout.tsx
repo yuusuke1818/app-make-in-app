@@ -1,28 +1,18 @@
 import type { Metadata } from "next";
-import SessionProvider from "@/components/SessionProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "A.M.I.A - App Make In App",
-  description: "AIがアプリを自動生成。作って、遊んで、共有しよう。",
+  description: "AIがゲームを自動生成。作って、遊んで、公開して、評価する。",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
       <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800;900&display=swap"
-          rel="stylesheet"
-        />
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       </head>
-      <body>
-        <SessionProvider>{children}</SessionProvider>
-      </body>
+      <body style={{ margin: 0, fontFamily: "'Noto Sans JP', sans-serif" }}>{children}</body>
     </html>
   );
 }
