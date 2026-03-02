@@ -534,18 +534,31 @@ try {
           ) : (
             PreviewGameComponent && <PreviewGameComponent />
           )}
-          <div style={{ padding: "16px", display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <button onClick={() => { setCreateStep("genre"); setSelections({}); setSelectedGenre(""); setAppName(""); setFreeInput(""); setGeneratedApp(null); setGenError(""); }}
-              style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #444", background: "transparent", color: "#aaa", cursor: "pointer", fontSize: 13 }}>作り直す</button>
-            {generatedApp.status === "draft" && (
-              <button onClick={() => publishApp(generatedApp)}
-                style={{ padding: "12px 28px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, color: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 800 }}>
-                🌐 公開する
+          {/* 改良＋操作パネル */}
+          <div style={{ padding: "12px 16px", background: CARD_BG, borderTop: "1px solid #222" }}>
+            {/* 改良入力 */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <input value={improveInput} onChange={e => setImproveInput(e.target.value)} placeholder="改良指示（例：敵を増やして、BGM演出を追加）"
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 13, outline: "none" }} />
+              <button onClick={() => improveApp(generatedApp)} disabled={!improveInput.trim() || improving}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: !improveInput.trim() || improving ? "#555" : "#FF8844", color: "#fff", cursor: !improveInput.trim() || improving ? "default" : "pointer", fontWeight: 700, fontSize: 13, minWidth: 80, whiteSpace: "nowrap" }}>
+                {improving ? "⏳..." : "🔧 改良"}
               </button>
-            )}
-            {generatedApp.status === "published" && (
-              <div style={{ padding: "12px 20px", background: "#1a3a1a", borderRadius: 10, color: "#4CAF50", fontWeight: 700 }}>✅ 公開済み</div>
-            )}
+            </div>
+            {/* アクションボタン */}
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <button onClick={() => { setCreateStep("genre"); setSelections({}); setSelectedGenre(""); setAppName(""); setFreeInput(""); setGeneratedApp(null); setGenError(""); setImproveInput(""); }}
+                style={{ padding: "10px 20px", borderRadius: 10, border: "1px solid #444", background: "transparent", color: "#aaa", cursor: "pointer", fontSize: 13 }}>作り直す</button>
+              {generatedApp.status === "draft" && (
+                <button onClick={() => publishApp(generatedApp)}
+                  style={{ padding: "12px 28px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, color: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 800 }}>
+                  🌐 公開する
+                </button>
+              )}
+              {generatedApp.status === "published" && (
+                <div style={{ padding: "12px 20px", background: "#1a3a1a", borderRadius: 10, color: "#4CAF50", fontWeight: 700 }}>✅ 公開済み</div>
+              )}
+            </div>
           </div>
         </div>
       );
