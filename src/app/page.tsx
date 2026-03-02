@@ -409,31 +409,50 @@ try {
   // ======================================
   // スタイル定数
   // ======================================
-  const BG = "#0a0a1a";
-  const CARD_BG = "#111118";
+  const BG = "#06060f";
+  const BG2 = "#0c0c1a";
+  const CARD_BG = "#12121e";
+  const CARD_BG2 = "#181828";
+  const BORDER = "#1e1e35";
   const ACCENT = "#4ECDC4";
   const ACCENT2 = "#FF6B6B";
+  const ACCENT3 = "#45B7D1";
+  const TEXT2 = "#9898b0";
+  const TEXT3 = "#5a5a75";
+
+  // ジャンルカラー
+  const GENRE_COLORS: Record<string, string> = {
+    battle: "#FF4444", card: "#4488FF", nurture: "#44BB44", puzzle: "#FF8844",
+    rpg: "#AA44FF", quiz: "#FFAA00", rhythm: "#FF44AA", simulator: "#44AAAA",
+    action: "#FF6644", horror: "#8844AA",
+  };
 
   // ======================================
   // ログインモーダル
   // ======================================
   const LoginModal = () => (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, animation: "fadeIn 0.2s ease-out" }}
       onClick={() => setShowLogin(false)}>
-      <div style={{ background: CARD_BG, borderRadius: 16, padding: 24, maxWidth: 380, width: "100%" }} onClick={e => e.stopPropagation()}>
-        <h2 style={{ fontSize: 20, fontWeight: 800, textAlign: "center", marginBottom: 4 }}>A.M.I.Aにログイン</h2>
-        <p style={{ fontSize: 12, color: "#888", textAlign: "center", marginBottom: 20 }}>アプリを作成・公開・評価するにはログインが必要</p>
+      <div style={{ background: `linear-gradient(145deg, ${CARD_BG}, ${CARD_BG2})`, borderRadius: 20, padding: 28, maxWidth: 380, width: "100%", border: `1px solid ${BORDER}`, boxShadow: "0 20px 60px rgba(0,0,0,0.5)", animation: "fadeInScale 0.3s ease-out" }} onClick={e => e.stopPropagation()}>
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>⚡</div>
+          <h2 style={{ fontSize: 22, fontWeight: 900, background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>A.M.I.Aにログイン</h2>
+          <p style={{ fontSize: 12, color: TEXT2, marginTop: 6 }}>アプリを作成・公開・評価しよう</p>
+        </div>
         <div style={{ marginBottom: 16 }}>
           <input value={loginName} onChange={e => setLoginName(e.target.value)} placeholder="ニックネーム（任意）"
-            style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #333", background: BG, color: "#eee", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            onKeyDown={e => { if (e.key === "Enter") guestLogin(); }}
+            style={{ width: "100%", padding: "12px 16px", borderRadius: 12, border: `1px solid ${BORDER}`, background: BG, color: "#eee", fontSize: 14, outline: "none", boxSizing: "border-box", transition: "border-color 0.2s" }} />
         </div>
         <button onClick={guestLogin}
-          style={{ width: "100%", padding: "12px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${ACCENT}, #45B7D1)`, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
+          style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT3})`, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s", boxShadow: `0 4px 15px rgba(78,205,196,0.3)` }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `0 6px 20px rgba(78,205,196,0.4)`; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = `0 4px 15px rgba(78,205,196,0.3)`; }}>
           🎮 ゲストログイン
         </button>
-        <button disabled style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #333", background: "transparent", color: "#666", fontSize: 14, cursor: "default" }}>
-          Googleログイン（準備中）
-        </button>
+        <div style={{ textAlign: "center", marginTop: 12 }}>
+          <span style={{ fontSize: 11, color: TEXT3 }}>Googleログインは準備中</span>
+        </div>
       </div>
     </div>
   );
@@ -441,26 +460,32 @@ try {
   // ======================================
   // アプリカード
   // ======================================
-  const AppCard = ({ app, showAuthor = true }: { app: AppData; showAuthor?: boolean }) => (
-    <button onClick={() => openPlay(app)}
-      style={{ background: CARD_BG, border: "1px solid #222", borderRadius: 14, padding: 14, cursor: "pointer", textAlign: "left", width: "100%", transition: "border-color 0.2s" }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT}
-      onMouseLeave={e => e.currentTarget.style.borderColor = "#222"}>
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-        <div style={{ fontSize: 36, width: 50, height: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "#1a1a2e", borderRadius: 10 }}>{app.thumbnail}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: "#eee", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.title}</div>
-          {showAuthor && <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{(app as any).users?.display_name || "匿名"}</div>}
-          <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#666" }}>
-            <span>▶ {app.play_count}</span>
-            <span>❤️ {app.like_count}</span>
-            {app.avg_rating > 0 && <span>⭐ {app.avg_rating}</span>}
-            <span style={{ color: "#555" }}>{app.genre}</span>
+  const AppCard = ({ app, showAuthor = true }: { app: AppData; showAuthor?: boolean }) => {
+    const gColor = GENRE_COLORS[app.genre] || ACCENT;
+    return (
+      <button onClick={() => openPlay(app)}
+        style={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 16, padding: 14, cursor: "pointer", textAlign: "left", width: "100%", transition: "all 0.2s ease", position: "relative", overflow: "hidden" }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = gColor + "88"; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 8px 24px ${gColor}15`; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+        {/* ジャンルカラーアクセント */}
+        <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", background: gColor, borderRadius: "16px 0 0 16px" }} />
+        <div style={{ display: "flex", gap: 12, alignItems: "center", paddingLeft: 6 }}>
+          <div style={{ fontSize: 32, width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", background: `${gColor}12`, borderRadius: 12, flexShrink: 0 }}>{app.thumbnail}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#eee", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.title}</div>
+            {showAuthor && <div style={{ fontSize: 11, color: TEXT2, marginBottom: 3 }}>{(app as any).users?.display_name || "匿名"}</div>}
+            <div style={{ display: "flex", gap: 10, fontSize: 11, color: TEXT3, alignItems: "center" }}>
+              <span>▶ {app.play_count}</span>
+              <span style={{ color: ACCENT2 }}>❤️ {app.like_count}</span>
+              {app.avg_rating > 0 && <span style={{ color: "#FFD700" }}>⭐ {app.avg_rating}</span>}
+              <span style={{ color: gColor, fontSize: 10, fontWeight: 600 }}>{GENRES.find(g => g.id === app.genre)?.label || app.genre}</span>
+            </div>
           </div>
+          <div style={{ color: TEXT3, fontSize: 16 }}>›</div>
         </div>
-      </div>
-    </button>
-  );
+      </button>
+    );
+  };
 
   // ======================================
   // プレイ画面
@@ -770,42 +795,57 @@ try {
   // メインレイアウト（タブ）
   // ======================================
   return (
-    <div style={{ minHeight: "100vh", background: BG, color: "#eee", fontFamily: "'Noto Sans JP', sans-serif", paddingBottom: 60 }}>
+    <div style={{ minHeight: "100vh", background: BG, color: "#eee", fontFamily: "'Noto Sans JP', sans-serif", paddingBottom: 68 }}>
       {showLogin && <LoginModal />}
 
       {/* ヘッダー */}
-      <header style={{ background: "linear-gradient(135deg, #1a0a2e, #0a1a3e)", padding: "12px 16px", borderBottom: "1px solid #222", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 900, background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: 0 }}>A.M.I.A</h1>
+      <header style={{ background: `linear-gradient(180deg, ${CARD_BG2}, ${BG})`, padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>⚡</div>
+          <h1 style={{ fontSize: 20, fontWeight: 900, letterSpacing: "-0.5px", background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: 0 }}>A.M.I.A</h1>
+        </div>
         {user ? (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 12, color: "#aaa" }}>{user.display_name}</span>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: ACCENT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700 }}>{user.display_name[0]}</div>
+            <span style={{ fontSize: 12, color: TEXT2 }}>{user.display_name}</span>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT3})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#fff", boxShadow: `0 2px 8px ${ACCENT}33` }}>{user.display_name[0]}</div>
           </div>
         ) : (
           <button onClick={() => setShowLogin(true)}
-            style={{ padding: "6px 16px", borderRadius: 8, border: `1px solid ${ACCENT}`, background: "transparent", color: ACCENT, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>ログイン</button>
+            style={{ padding: "7px 18px", borderRadius: 20, border: "none", background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT3})`, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 700, boxShadow: `0 2px 10px ${ACCENT}33`, transition: "transform 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
+            onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
+            ログイン
+          </button>
         )}
       </header>
 
       {/* コンテンツ */}
-      <main style={{ maxWidth: 650, margin: "0 auto", padding: "16px" }}>
+      <main style={{ maxWidth: 650, margin: "0 auto", padding: "16px 16px 0" }}>
         {/* ホーム */}
         {tab === "home" && (
           <>
-            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>🔥 新着アプリ</h2>
+            {/* ヒーローバナー */}
+            <div style={{ background: `linear-gradient(135deg, ${CARD_BG2}, ${ACCENT}10)`, borderRadius: 20, padding: "24px 20px", marginBottom: 20, border: `1px solid ${BORDER}`, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: -30, right: -20, fontSize: 80, opacity: 0.06 }}>⚡</div>
+              <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT3})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>AIでゲームを作ろう</h2>
+              <p style={{ fontSize: 12, color: TEXT2, marginBottom: 14, lineHeight: 1.6 }}>ジャンルと要素を選ぶだけ。AIが本格ゲームを生成。作って、遊んで、公開して、評価しよう。</p>
+              <button onClick={() => { if (!user) setShowLogin(true); else { setTab("create"); setCreateStep("genre"); } }}
+                style={{ padding: "10px 22px", borderRadius: 12, border: "none", background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, boxShadow: `0 4px 15px ${ACCENT2}22`, transition: "transform 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
+                onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
+                ⚡ アプリを作成する
+              </button>
+            </div>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: TEXT2 }}>🔥 新着アプリ</h3>
             {publicApps.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {publicApps.map(app => <AppCard key={app.id} app={app} />)}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {publicApps.map((app, i) => <div key={app.id} style={{ animation: `fadeIn 0.3s ease-out ${i * 0.05}s both` }}><AppCard app={app} /></div>)}
               </div>
             ) : (
-              <div style={{ textAlign: "center", padding: "40px 20px", color: "#555" }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🎮</div>
-                <p style={{ fontSize: 14, marginBottom: 8 }}>まだアプリが公開されていません</p>
-                <p style={{ fontSize: 12 }}>最初のアプリを作って公開しよう！</p>
-                <button onClick={() => { if (!user) { setShowLogin(true); } else { setTab("create"); setCreateStep("genre"); } }}
-                  style={{ marginTop: 12, padding: "10px 24px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
-                  ⚡ アプリを作成
-                </button>
+              <div style={{ textAlign: "center", padding: "50px 20px" }}>
+                <div style={{ fontSize: 56, marginBottom: 12, opacity: 0.3 }}>🎮</div>
+                <p style={{ fontSize: 14, color: TEXT2, marginBottom: 4 }}>まだアプリが公開されていません</p>
+                <p style={{ fontSize: 12, color: TEXT3 }}>最初のアプリを作って公開しよう！</p>
               </div>
             )}
           </>
@@ -828,18 +868,24 @@ try {
         {/* ランキング */}
         {tab === "ranking" && (
           <>
-            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>🏆 ランキング</h2>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: TEXT2 }}>🏆 ランキング</h2>
             {rankingApps.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {rankingApps.map((app, i) => (
-                  <div key={app.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: i === 0 ? "#FFD700" : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : "#555", width: 24, textAlign: "center" }}>{i + 1}</span>
+                  <div key={app.id} style={{ display: "flex", alignItems: "center", gap: 8, animation: `fadeIn 0.3s ease-out ${i * 0.05}s both` }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: i < 3 ? 13 : 11, fontWeight: 800, flexShrink: 0,
+                      background: i === 0 ? "linear-gradient(135deg, #FFD700, #FFA500)" : i === 1 ? "linear-gradient(135deg, #C0C0C0, #888)" : i === 2 ? "linear-gradient(135deg, #CD7F32, #8B4513)" : CARD_BG,
+                      color: i < 3 ? "#fff" : TEXT3, border: i >= 3 ? `1px solid ${BORDER}` : "none",
+                      boxShadow: i === 0 ? "0 2px 8px rgba(255,215,0,0.3)" : "none",
+                    }}>{i + 1}</div>
                     <div style={{ flex: 1 }}><AppCard app={app} /></div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ textAlign: "center", padding: 40, color: "#555" }}>まだランキングデータがありません</div>
+              <div style={{ textAlign: "center", padding: 50, color: TEXT3 }}>まだランキングデータがありません</div>
             )}
           </>
         )}
@@ -887,20 +933,25 @@ try {
       </main>
 
       {/* ボトムタブ */}
-      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: CARD_BG, borderTop: "1px solid #222", display: "flex", zIndex: 50 }}>
+      <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(12,12,26,0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: `1px solid ${BORDER}`, display: "flex", zIndex: 50, padding: "2px 0 env(safe-area-inset-bottom, 0px)" }}>
         {([
           { id: "home", icon: "🏠", label: "ホーム" },
           { id: "create", icon: "⚡", label: "作成" },
           { id: "community", icon: "🌐", label: "コミュニティ" },
           { id: "ranking", icon: "🏆", label: "ランキング" },
           { id: "myapps", icon: "📦", label: "マイアプリ" },
-        ] as const).map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); if (t.id === "create" && user) setCreateStep("genre"); }}
-            style={{ flex: 1, padding: "8px 0", background: "none", border: "none", cursor: "pointer", textAlign: "center", color: tab === t.id ? ACCENT : "#666", transition: "color 0.2s" }}>
-            <div style={{ fontSize: 18 }}>{t.icon}</div>
-            <div style={{ fontSize: 9, marginTop: 2, fontWeight: tab === t.id ? 700 : 400 }}>{t.label}</div>
-          </button>
-        ))}
+        ] as const).map(t => {
+          const isActive = tab === t.id;
+          const isCreate = t.id === "create";
+          return (
+            <button key={t.id} onClick={() => { setTab(t.id); if (t.id === "create" && user) setCreateStep("genre"); }}
+              style={{ flex: 1, padding: isCreate ? "4px 0 6px" : "6px 0 8px", background: "none", border: "none", cursor: "pointer", textAlign: "center", color: isActive ? ACCENT : TEXT3, transition: "all 0.2s", position: "relative" }}>
+              {isActive && <div style={{ position: "absolute", top: -1, left: "25%", right: "25%", height: 2, borderRadius: 1, background: ACCENT }} />}
+              <div style={{ fontSize: isCreate ? 22 : 17, ...(isCreate ? { width: 42, height: 42, borderRadius: 14, background: `linear-gradient(135deg, ${ACCENT2}, ${ACCENT})`, display: "inline-flex", alignItems: "center", justifyContent: "center", margin: "-8px auto 0", boxShadow: `0 4px 12px ${ACCENT}33` } : {}) }}>{t.icon}</div>
+              <div style={{ fontSize: 9, marginTop: isCreate ? 1 : 2, fontWeight: isActive ? 700 : 400, letterSpacing: "0.2px" }}>{t.label}</div>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
