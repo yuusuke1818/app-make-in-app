@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { GENRES, GENRE_THUMBNAILS, getFilteredCategories } from "@/lib/elements";
 import { BattleGame, NurtureGame, PuzzleGame, QuizGame, SimulatorGame } from "@/components/StubGames";
 import { supabase } from "@/lib/supabase";
@@ -347,15 +347,20 @@ try {
     if (playingApp && playingApp.code !== "stub" && iframeRef.current) renderAIGame(playingApp.code);
   }, [playingApp]);
 
+  // プレビュー画面でもiframe更新（改良後の再描画対応）
+  useEffect(() => {
+    if (generatedApp && generatedApp.code !== "stub" && iframeRef.current) renderAIGame(generatedApp.code);
+  }, [generatedApp]);
+
   // ======================================
   // 公開
   // ======================================
   const publishApp = async (app: AppData) => {
     if (supabase) {
-      try { await supabase.from("apps").update({ status: "published" }).eq("id", app.id); } catch {}
+      try { await supabase.from("apps").update({ status: "published" }).eq("id", app.id); } catch (e) { console.warn("publish error", e); }
     }
-    app.status = "published";
-    setGeneratedApp({ ...app });
+    const updated = { ...app, status: "published" };
+    setGeneratedApp(updated);
     loadPublicApps();
     loadMyApps();
   };
@@ -369,17 +374,18 @@ try {
     try {
       if (hasLiked) {
         await supabase.from("likes").delete().eq("app_id", app.id).eq("user_id", user.id);
-        await supabase.from("apps").update({ like_count: Math.max(0, app.like_count - 1) }).eq("id", app.id);
-        app.like_count = Math.max(0, app.like_count - 1);
+        const nc = Math.max(0, app.like_count - 1);
+        await supabase.from("apps").update({ like_count: nc }).eq("id", app.id);
         setHasLiked(false);
+        setPlayingApp({ ...app, like_count: nc });
       } else {
         await supabase.from("likes").insert({ app_id: app.id, user_id: user.id });
-        await supabase.from("apps").update({ like_count: app.like_count + 1 }).eq("id", app.id);
-        app.like_count += 1;
+        const nc = app.like_count + 1;
+        await supabase.from("apps").update({ like_count: nc }).eq("id", app.id);
         setHasLiked(true);
+        setPlayingApp({ ...app, like_count: nc });
       }
-      setPlayingApp({ ...app });
-    } catch {}
+    } catch (e) { console.warn("like error", e); }
   };
 
   // ======================================
@@ -408,17 +414,24 @@ try {
     setHasLiked(false);
     setMyRating(0);
     setShowImprove(false);
-    // プレイ数加算
+    setRevisions([]);
+    // プレイ数加算＋いいね/評価状態取得
     if (supabase) {
       try {
         await supabase.from("apps").update({ play_count: app.play_count + 1 }).eq("id", app.id);
-        if (user) {
-          const { data: like } = await supabase.from("likes").select("id").eq("app_id", app.id).eq("user_id", user.id).single();
-          if (like) setHasLiked(true);
-          const { data: rating } = await supabase.from("ratings").select("score").eq("app_id", app.id).eq("user_id", user.id).single();
-          if (rating) setMyRating(rating.score);
-        }
-      } catch {}
+      } catch (e) { console.warn("play_count update failed:", e); }
+      if (user) {
+        try {
+          const { data: likes } = await supabase.from("likes").select("id").eq("app_id", app.id).eq("user_id", user.id).limit(1);
+          if (likes && likes.length > 0) setHasLiked(true);
+        } catch {}
+        try {
+          const { data: ratings } = await supabase.from("ratings").select("score").eq("app_id", app.id).eq("user_id", user.id).limit(1);
+          if (ratings && ratings.length > 0) setMyRating(ratings[0].score);
+        } catch {}
+      }
+      // 改良履歴取得
+      loadRevisions(app.id);
     }
   };
 
@@ -643,8 +656,7 @@ try {
             <span style={{ fontSize: 10, color: isAI ? ACCENT : "#FF8844", background: "#222", padding: "2px 6px", borderRadius: 4 }}>{isAI ? "AI生成" : "STUB"}</span>
           </div>
           {isAI ? (
-            <iframe style={{ flex: 1, width: "100%", border: "none", minHeight: "55vh" }} title={generatedApp.title}
-              ref={(el) => { if (el && generatedApp.code !== "stub") { const esc = generatedApp.code.replace(/<\/script>/g, "<\\/script>"); el.srcdoc = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800;900&display=swap" rel="stylesheet"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Noto Sans JP",sans-serif;background:#0a0a1a;color:#eee;overflow-x:hidden}#root{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:8px}</style></head><body><div id="root"></div><script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"><\\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"><\\/script><script type="text/babel">try{' + esc + ';const root=ReactDOM.createRoot(document.getElementById("root"));root.render(React.createElement(Game));}catch(e){document.getElementById("root").innerHTML="<div style=\\"padding:20px;color:#f44;text-align:center\\"><h3>エラー</h3><p>"+e.message+"</p></div>";}<\\/script></body></html>'; } }} />
+            <iframe ref={iframeRef} style={{ flex: 1, width: "100%", border: "none", minHeight: "55vh" }} title={generatedApp.title} />
           ) : (
             PreviewGameComponent && <PreviewGameComponent />
           )}
