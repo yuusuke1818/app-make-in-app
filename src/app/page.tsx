@@ -400,12 +400,11 @@ try {
       const { data: ratings } = await supabase.from("ratings").select("score").eq("app_id", app.id);
       if (ratings && ratings.length > 0) {
         const avg = ratings.reduce((s, r) => s + r.score, 0) / ratings.length;
-        await supabase.from("apps").update({ avg_rating: Math.round(avg * 10) / 10, rating_count: ratings.length }).eq("id", app.id);
-        app.avg_rating = Math.round(avg * 10) / 10;
-        app.rating_count = ratings.length;
-        setPlayingApp({ ...app });
+        const newAvg = Math.round(avg * 10) / 10;
+        await supabase.from("apps").update({ avg_rating: newAvg, rating_count: ratings.length }).eq("id", app.id);
+        setPlayingApp({ ...app, avg_rating: newAvg, rating_count: ratings.length });
       }
-    } catch {}
+    } catch (e) { console.warn("rate error", e); }
   };
 
   // プレイ時にいいね・評価状態取得
